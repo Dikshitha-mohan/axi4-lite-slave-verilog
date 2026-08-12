@@ -1,0 +1,303 @@
+`timescale 1ns/1ps
+
+module tb_axi_lite_slave;
+
+    reg         S_AXI_ACLK;
+    reg         S_AXI_ARESETN;
+
+    // Write Address
+    reg [3:0]   S_AXI_AWADDR;
+    reg         S_AXI_AWVALID;
+    wire        S_AXI_AWREADY;
+
+    // Write Data
+    reg [31:0]  S_AXI_WDATA;
+    reg [3:0]   S_AXI_WSTRB;
+    reg         S_AXI_WVALID;
+    wire        S_AXI_WREADY;
+
+    // Write Response
+    wire [1:0]  S_AXI_BRESP;
+    wire        S_AXI_BVALID;
+    reg         S_AXI_BREADY;
+
+    // Read Address
+    reg [3:0]   S_AXI_ARADDR;
+    reg         S_AXI_ARVALID;
+    wire        S_AXI_ARREADY;
+
+    // Read Data
+    wire [31:0] S_AXI_RDATA;
+    wire [1:0]  S_AXI_RRESP;
+    wire        S_AXI_RVALID;
+    reg         S_AXI_RREADY;
+
+
+    //==================================================
+    // DUT
+    //==================================================
+
+    axi_lite_slave DUT (
+
+        .S_AXI_ACLK    (S_AXI_ACLK),
+        .S_AXI_ARESETN (S_AXI_ARESETN),
+
+        .S_AXI_AWADDR  (S_AXI_AWADDR),
+        .S_AXI_AWVALID (S_AXI_AWVALID),
+        .S_AXI_AWREADY (S_AXI_AWREADY),
+
+        .S_AXI_WDATA   (S_AXI_WDATA),
+        .S_AXI_WSTRB   (S_AXI_WSTRB),
+        .S_AXI_WVALID  (S_AXI_WVALID),
+        .S_AXI_WREADY  (S_AXI_WREADY),
+
+        .S_AXI_BRESP   (S_AXI_BRESP),
+        .S_AXI_BVALID  (S_AXI_BVALID),
+        .S_AXI_BREADY  (S_AXI_BREADY),
+
+        .S_AXI_ARADDR  (S_AXI_ARADDR),
+        .S_AXI_ARVALID (S_AXI_ARVALID),
+        .S_AXI_ARREADY (S_AXI_ARREADY),
+
+        .S_AXI_RDATA   (S_AXI_RDATA),
+        .S_AXI_RRESP   (S_AXI_RRESP),
+        .S_AXI_RVALID  (S_AXI_RVALID),
+        .S_AXI_RREADY  (S_AXI_RREADY)
+    );
+
+
+    //==================================================
+    // CLOCK
+    //==================================================
+
+    always #5 S_AXI_ACLK = ~S_AXI_ACLK;
+
+
+    //==================================================
+    // WAVEFORM GENERATION
+    //==================================================
+
+    initial begin
+
+        $dumpfile("axi_lite.vcd");
+        $dumpvars(0, tb_axi_lite_slave);
+
+    end
+
+
+    //==================================================
+    // INITIAL VALUES
+    //==================================================
+
+    initial begin
+
+        S_AXI_ACLK    = 1'b0;
+        S_AXI_ARESETN = 1'b0;
+
+        S_AXI_AWADDR  = 4'h0;
+        S_AXI_AWVALID = 1'b0;
+
+        S_AXI_WDATA   = 32'h00000000;
+        S_AXI_WSTRB   = 4'b0000;
+        S_AXI_WVALID  = 1'b0;
+
+        S_AXI_BREADY  = 1'b0;
+
+        S_AXI_ARADDR  = 4'h0;
+        S_AXI_ARVALID = 1'b0;
+
+        S_AXI_RREADY  = 1'b0;
+
+    end
+
+
+    //==================================================
+    // WRITE TASK
+    //==================================================
+
+    task WRITE_REG;
+
+        input [3:0]  ADDRESS;
+        input [31:0] DATA;
+
+        begin
+
+            $display("");
+            $display("--------------------------------");
+            $display("WRITE TRANSACTION");
+            $display("Address : %h", ADDRESS);
+            $display("Data    : %h", DATA);
+
+            // Put signals on bus
+            @(negedge S_AXI_ACLK);
+
+            S_AXI_AWADDR  = ADDRESS;
+            S_AXI_AWVALID = 1'b1;
+
+            S_AXI_WDATA   = DATA;
+            S_AXI_WSTRB   = 4'b1111;
+            S_AXI_WVALID  = 1'b1;
+
+            // Address handshake
+            @(posedge S_AXI_ACLK);
+
+            if (S_AXI_AWREADY) begin
+                S_AXI_AWVALID = 1'b0;
+                $display("AW HANDSHAKE : OK");
+            end
+
+            // Data handshake
+            @(posedge S_AXI_ACLK);
+
+            if (S_AXI_WREADY) begin
+                S_AXI_WVALID = 1'b0;
+                $display("W HANDSHAKE  : OK");
+            end
+
+            // Wait for write response
+            S_AXI_BREADY = 1'b1;
+
+            @(posedge S_AXI_ACLK);
+            @(posedge S_AXI_ACLK);
+
+            if (S_AXI_BVALID) begin
+
+                if (S_AXI_BRESP == 2'b00)
+                    $display("BRESP         : OKAY");
+                else
+                    $display("BRESP         : SLVERR");
+
+            end
+
+            @(negedge S_AXI_ACLK);
+
+            S_AXI_BREADY = 1'b0;
+
+        end
+
+    endtask
+
+
+    //==================================================
+    // READ TASK
+    //==================================================
+
+    task READ_REG;
+
+        input [3:0] ADDRESS;
+
+        begin
+
+            $display("");
+            $display("--------------------------------");
+            $display("READ TRANSACTION");
+            $display("Address : %h", ADDRESS);
+
+            @(negedge S_AXI_ACLK);
+
+            S_AXI_ARADDR  = ADDRESS;
+            S_AXI_ARVALID = 1'b1;
+
+            // Address handshake
+            @(posedge S_AXI_ACLK);
+
+            if (S_AXI_ARREADY) begin
+
+                S_AXI_ARVALID = 1'b0;
+
+                $display("AR HANDSHAKE : OK");
+
+            end
+
+            // Ready for read data
+            S_AXI_RREADY = 1'b1;
+
+            @(posedge S_AXI_ACLK);
+
+            if (S_AXI_RVALID) begin
+
+                $display("RDATA         : %h",
+                         S_AXI_RDATA);
+
+                if (S_AXI_RRESP == 2'b00)
+                    $display("RRESP         : OKAY");
+                else
+                    $display("RRESP         : SLVERR");
+
+            end
+
+            @(negedge S_AXI_ACLK);
+
+            S_AXI_RREADY = 1'b0;
+
+        end
+
+    endtask
+
+
+    //==================================================
+    // MAIN TEST
+    //==================================================
+
+    initial begin
+
+        // Reset
+        #20;
+
+        S_AXI_ARESETN = 1'b1;
+
+        $display("");
+        $display("========================================");
+        $display("       AXI4-LITE SLAVE TEST");
+        $display("========================================");
+
+
+        //==============================================
+        // WRITE FOUR REGISTERS
+        //==============================================
+
+        WRITE_REG(4'h0, 32'h12345678);
+
+        WRITE_REG(4'h4, 32'hAABBCCDD);
+
+        WRITE_REG(4'h8, 32'hDEADBEEF);
+
+        WRITE_REG(4'hC, 32'hCAFEBABE);
+
+
+        //==============================================
+        // READ FOUR REGISTERS
+        //==============================================
+
+        READ_REG(4'h0);
+
+        READ_REG(4'h4);
+
+        READ_REG(4'h8);
+
+        READ_REG(4'hC);
+
+
+        //==============================================
+        // INVALID ADDRESS
+        //==============================================
+
+        READ_REG(4'h2);
+
+
+        //==============================================
+        // FINISH
+        //==============================================
+
+        #20;
+
+        $display("");
+        $display("========================================");
+        $display("       TEST COMPLETED SUCCESSFULLY");
+        $display("========================================");
+
+        $finish;
+
+    end
+
+endmodule

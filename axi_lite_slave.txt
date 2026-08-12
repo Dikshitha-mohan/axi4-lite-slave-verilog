@@ -1,0 +1,308 @@
+`timescale 1ns/1ps
+
+module axi_lite_slave (
+
+    input wire         S_AXI_ACLK,
+    input wire         S_AXI_ARESETN,
+
+    // Write Address Channel
+    input wire [3:0]   S_AXI_AWADDR,
+    input wire         S_AXI_AWVALID,
+    output wire        S_AXI_AWREADY,
+
+    // Write Data Channel
+    input wire [31:0]  S_AXI_WDATA,
+    input wire [3:0]   S_AXI_WSTRB,
+    input wire         S_AXI_WVALID,
+    output wire        S_AXI_WREADY,
+
+    // Write Response Channel
+    output reg [1:0]   S_AXI_BRESP,
+    output reg         S_AXI_BVALID,
+    input wire         S_AXI_BREADY,
+
+    // Read Address Channel
+    input wire [3:0]   S_AXI_ARADDR,
+    input wire         S_AXI_ARVALID,
+    output wire        S_AXI_ARREADY,
+
+    // Read Data Channel
+    output reg [31:0]  S_AXI_RDATA,
+    output reg [1:0]   S_AXI_RRESP,
+    output reg         S_AXI_RVALID,
+    input wire         S_AXI_RREADY
+);
+
+    //==================================================
+    // INTERNAL REGISTERS
+    //==================================================
+
+    reg [31:0] REG0;
+    reg [31:0] REG1;
+    reg [31:0] REG2;
+    reg [31:0] REG3;
+
+    //==================================================
+    // WRITE STORAGE
+    //==================================================
+
+    reg [3:0]  awaddr_reg;
+    reg [31:0] wdata_reg;
+    reg [3:0]  wstrb_reg;
+
+    reg aw_done;
+    reg w_done;
+
+    //==================================================
+    // READY SIGNALS
+    //==================================================
+
+    /*
+     * Accept one write address at a time.
+     */
+    assign S_AXI_AWREADY =
+            S_AXI_ARESETN &&
+            !aw_done &&
+            !S_AXI_BVALID;
+
+    /*
+     * Accept one write data transaction at a time.
+     */
+    assign S_AXI_WREADY =
+            S_AXI_ARESETN &&
+            !w_done &&
+            !S_AXI_BVALID;
+
+    /*
+     * Read is allowed when there is no write response
+     * and no read response currently pending.
+     */
+    assign S_AXI_ARREADY =
+            S_AXI_ARESETN &&
+            !S_AXI_RVALID &&
+            !S_AXI_BVALID &&
+            !aw_done &&
+            !w_done;
+
+    //==================================================
+    // MAIN SEQUENTIAL LOGIC
+    //==================================================
+
+    always @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
+
+        if (!S_AXI_ARESETN) begin
+
+            REG0 <= 32'h00000000;
+            REG1 <= 32'h00000000;
+            REG2 <= 32'h00000000;
+            REG3 <= 32'h00000000;
+
+            awaddr_reg <= 4'h0;
+            wdata_reg  <= 32'h00000000;
+            wstrb_reg  <= 4'h0;
+
+            aw_done <= 1'b0;
+            w_done  <= 1'b0;
+
+            S_AXI_BRESP  <= 2'b00;
+            S_AXI_BVALID <= 1'b0;
+
+            S_AXI_RDATA  <= 32'h00000000;
+            S_AXI_RRESP  <= 2'b00;
+            S_AXI_RVALID <= 1'b0;
+
+        end
+
+        else begin
+
+            //==================================================
+            // CAPTURE WRITE ADDRESS
+            //==================================================
+
+            if (S_AXI_AWVALID && S_AXI_AWREADY) begin
+
+                awaddr_reg <= S_AXI_AWADDR;
+                aw_done    <= 1'b1;
+
+            end
+
+
+            //==================================================
+            // CAPTURE WRITE DATA
+            //==================================================
+
+            if (S_AXI_WVALID && S_AXI_WREADY) begin
+
+                wdata_reg <= S_AXI_WDATA;
+                wstrb_reg <= S_AXI_WSTRB;
+                w_done    <= 1'b1;
+
+            end
+
+
+            //==================================================
+            // WRITE REGISTER
+            //==================================================
+
+            if (aw_done && w_done && !S_AXI_BVALID) begin
+
+                case (awaddr_reg)
+
+                    4'h0: begin
+
+                        if (wstrb_reg[0])
+                            REG0[7:0] <= wdata_reg[7:0];
+
+                        if (wstrb_reg[1])
+                            REG0[15:8] <= wdata_reg[15:8];
+
+                        if (wstrb_reg[2])
+                            REG0[23:16] <= wdata_reg[23:16];
+
+                        if (wstrb_reg[3])
+                            REG0[31:24] <= wdata_reg[31:24];
+
+                        S_AXI_BRESP <= 2'b00;
+
+                    end
+
+
+                    4'h4: begin
+
+                        if (wstrb_reg[0])
+                            REG1[7:0] <= wdata_reg[7:0];
+
+                        if (wstrb_reg[1])
+                            REG1[15:8] <= wdata_reg[15:8];
+
+                        if (wstrb_reg[2])
+                            REG1[23:16] <= wdata_reg[23:16];
+
+                        if (wstrb_reg[3])
+                            REG1[31:24] <= wdata_reg[31:24];
+
+                        S_AXI_BRESP <= 2'b00;
+
+                    end
+
+
+                    4'h8: begin
+
+                        if (wstrb_reg[0])
+                            REG2[7:0] <= wdata_reg[7:0];
+
+                        if (wstrb_reg[1])
+                            REG2[15:8] <= wdata_reg[15:8];
+
+                        if (wstrb_reg[2])
+                            REG2[23:16] <= wdata_reg[23:16];
+
+                        if (wstrb_reg[3])
+                            REG2[31:24] <= wdata_reg[31:24];
+
+                        S_AXI_BRESP <= 2'b00;
+
+                    end
+
+
+                    4'hC: begin
+
+                        if (wstrb_reg[0])
+                            REG3[7:0] <= wdata_reg[7:0];
+
+                        if (wstrb_reg[1])
+                            REG3[15:8] <= wdata_reg[15:8];
+
+                        if (wstrb_reg[2])
+                            REG3[23:16] <= wdata_reg[23:16];
+
+                        if (wstrb_reg[3])
+                            REG3[31:24] <= wdata_reg[31:24];
+
+                        S_AXI_BRESP <= 2'b00;
+
+                    end
+
+
+                    default: begin
+
+                        S_AXI_BRESP <= 2'b10;
+
+                    end
+
+                endcase
+
+                S_AXI_BVALID <= 1'b1;
+
+                aw_done <= 1'b0;
+                w_done  <= 1'b0;
+
+            end
+
+
+            //==================================================
+            // WRITE RESPONSE HANDSHAKE
+            //==================================================
+
+            if (S_AXI_BVALID && S_AXI_BREADY) begin
+
+                S_AXI_BVALID <= 1'b0;
+
+            end
+
+
+            //==================================================
+            // READ TRANSACTION
+            //==================================================
+
+            if (S_AXI_ARVALID && S_AXI_ARREADY) begin
+
+                case (S_AXI_ARADDR)
+
+                    4'h0: begin
+                        S_AXI_RDATA <= REG0;
+                        S_AXI_RRESP <= 2'b00;
+                    end
+
+                    4'h4: begin
+                        S_AXI_RDATA <= REG1;
+                        S_AXI_RRESP <= 2'b00;
+                    end
+
+                    4'h8: begin
+                        S_AXI_RDATA <= REG2;
+                        S_AXI_RRESP <= 2'b00;
+                    end
+
+                    4'hC: begin
+                        S_AXI_RDATA <= REG3;
+                        S_AXI_RRESP <= 2'b00;
+                    end
+
+                    default: begin
+                        S_AXI_RDATA <= 32'h00000000;
+                        S_AXI_RRESP <= 2'b10;
+                    end
+
+                endcase
+
+                S_AXI_RVALID <= 1'b1;
+
+            end
+
+
+            //==================================================
+            // READ RESPONSE HANDSHAKE
+            //==================================================
+
+            if (S_AXI_RVALID && S_AXI_RREADY) begin
+
+                S_AXI_RVALID <= 1'b0;
+
+            end
+
+        end
+
+    end
+
+endmodule
